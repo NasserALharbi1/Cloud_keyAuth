@@ -308,8 +308,8 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Custom Identifier (Optional)</label>
-                    <input type="text" id="customTag" placeholder="e.g. VIP, TEST, USER1">
+                    <label>Custom Key Name (Leave empty for Auto-Generate)</label>
+                    <input type="text" id="customKeyInput" placeholder="e.g. MY-SPECIAL-KEY-2026 or NasserVIP">
                 </div>
                 <button class="btn" style="width: 200px;" onclick="generateKey()">CREATE KEY</button>
             </div>
@@ -334,9 +334,15 @@
             </table>
         </div>
 
-        <!-- EXPORT / GITHUB RAW SYNC -->
+        <!-- EXPORT / GITHUB RAW SYNC & DOWNLOAD -->
         <div class="export-box">
-            <h4>Generated keys.json (Copy this output to keys.json on GitHub):</h4>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h4>Generated keys.json (Saved automatically to Local & ready for GitHub):</h4>
+                <div>
+                    <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 13px;" onclick="downloadKeysJson()">DOWNLOAD keys.json</button>
+                    <button class="btn" style="width: auto; padding: 6px 14px; font-size: 13px; background: #00e676; color: #000;" onclick="copyJsonText()">COPY JSON</button>
+                </div>
+            </div>
             <textarea id="jsonExport" readonly></textarea>
         </div>
     </div>
@@ -380,10 +386,14 @@
 
         function generateKey() {
             const days = parseInt(document.getElementById('durationSelect').value);
-            const tag = document.getElementById('customTag').value.trim();
+            const customKeyVal = document.getElementById('customKeyInput').value.trim();
             
-            const randomWords = tag ? tag.toUpperCase() + randomString(4) : randomString(6);
-            const keyStr = `Cloud-${days}days-${randomWords}`;
+            let keyStr = "";
+            if (customKeyVal !== "") {
+                keyStr = customKeyVal;
+            } else {
+                keyStr = `Cloud-${days}days-${randomString(6)}`;
+            }
             
             const nowSec = Math.floor(Date.now() / 1000);
             const expireTimestamp = nowSec + (days * 86400);
@@ -396,7 +406,7 @@
 
             saveData();
             renderTable();
-            document.getElementById('customTag').value = '';
+            document.getElementById('customKeyInput').value = '';
         }
 
         function deleteKey(index) {
@@ -405,8 +415,44 @@
             renderTable();
         }
 
+        function expireKeyNow(index) {
+            keyList[index].expire_timestamp = Math.floor(Date.now() / 1000) - 10;
+            saveData();
+            renderTable();
+        }
+
+        function extendKeyDays(index, addDays) {
+            keyList[index].expire_timestamp += (addDays * 86400);
+            saveData();
+            renderTable();
+        }
+
         function saveData() {
             localStorage.setItem('cloud_keys', JSON.stringify(keyList));
+        }
+
+        function downloadKeysJson() {
+            const jsonObj = {
+                updated_at: new Date().toISOString(),
+                keys: keyList.map(k => ({
+                    key: k.key,
+                    expire_timestamp: k.expire_timestamp
+                }))
+            };
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(jsonObj, null, 4));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", "keys.json");
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function copyJsonText() {
+            const copyText = document.getElementById("jsonExport");
+            copyText.select();
+            document.execCommand("copy");
+            alert("keys.json copied to clipboard!");
         }
 
         function renderTable() {
@@ -430,12 +476,16 @@
                     <td>${item.duration} Days</td>
                     <td>${expDateStr}</td>
                     <td>${statusBadge}</td>
-                    <td><button class="btn btn-danger" onclick="deleteKey(${index})">DELETE</button></td>
+                    <td>
+                        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; margin-right: 5px;" onclick="extendKeyDays(${index}, 7)">+7 Days</button>
+                        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; margin-right: 5px; background: #e65100;" onclick="expireKeyNow(${index})">End Now</button>
+                        <button class="btn btn-danger" onclick="deleteKey(${index})">DELETE</button>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
 
-            // Update JSON Export Box for GitHub upload
+            // Update JSON Export Box
             const jsonObj = {
                 updated_at: new Date().toISOString(),
                 keys: keyList.map(k => ({
